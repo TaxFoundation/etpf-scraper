@@ -1,38 +1,48 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-const root = 'https://etpf.org'
-let sitemap = {};
-let pages = 0;
 
-async function getHTML(url) {
-  const { data } = await axios.get(url);
-  return cheerio.load(data);
+async function mapLinks(root, path, sitemap) {
+  try {
+    let theSitemap = sitemap;
+    const url = `${root}/${path}`;
+    console.log(`Checking ${url}...`)
+
+    const { data } = await axios.get(url);
+    const $ = cheerio.load(data);
+    let links = [...new Set($('a').map((i, el) => $(el).attr('href')).get())];
+
+    // remove external links and dedupe
+    links = links.filter(link => (
+      link.match(/^(?!http|mailto).*/)
+      && !link.match(/.*etpf\.org.*/)
+      && !link.match(path)
+    ));
+
+    // add new key and set links at path
+    theSitemap.set(path, links);
+
+    // filter out crawled internal links
+    links = links.filter(link => (
+      !theSitemap.has(link)
+      && link.match(/\.html$/)
+    ));
+
+    console.log(`${url} has ${links.length} uncrawled links.`);
+
+    links.forEach(async link => {
+      const updatedSitemap = await mapLinks(root, link, theSitemap);
+      theSitemap = new Map([...theSitemap, ...updatedSitemap])
+    });
+
+    return theSitemap;
+  } catch (error) {
+    console.error(error);
+  }
 }
 
-async function getLinks(url) {
-  const $ = await getHTML(url);
-  if (!sitemap[url]) sitemap[url] = [];
-
-  const links = $('a').map((i, el) => {
-    return $(el).attr('href');
-  }).get().map(link => root + '/' + link);
-
-  if (!sitemap[url].length) sitemap[url] = links;
-
-  links.forEach(link => {
-    if (!sitemap[link]) sitemap[link] = [];
-    if (link.match(/\.html$/) && sitemap[link].length <= 0) {
-      getLinks(link);
-    }
-  });
-
-  pages += 1;
-  console.log(pages);
-}
-
-function scrape() {
-  getLinks(root);
+async function scrape() {
+  const sitemap = await mapLinks('https://etpf.org', 'index.html', new Map());
   console.log(sitemap);
 }
 
