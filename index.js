@@ -3,6 +3,10 @@ const cheerio = require('cheerio');
 
 
 async function mapLinks(root, path, sitemap) {
+  if (sitemap.has(path)) {
+    return sitemap;
+  }
+
   try {
     let theSitemap = sitemap;
     const url = `${root}/${path}`;
@@ -15,7 +19,6 @@ async function mapLinks(root, path, sitemap) {
     // remove external links and dedupe
     links = links.filter(link => (
       link.match(/^(?!http|mailto).*/)
-      && !link.match(/.*etpf\.org.*/)
       && !link.match(path)
     ));
 
@@ -28,12 +31,14 @@ async function mapLinks(root, path, sitemap) {
       && link.match(/\.html$/)
     ));
 
-    console.log(`${url} has ${links.length} uncrawled links.`);
+    if (links.length) {
+      console.log(`${url} has ${links.length} uncrawled links.`);
 
-    links.forEach(async link => {
-      const updatedSitemap = await mapLinks(root, link, theSitemap);
-      theSitemap = new Map([...theSitemap, ...updatedSitemap])
-    });
+      for (let i = 0, j = links.length; i < j; i++) {
+        const updatedSitemap = await mapLinks(root, links[i], theSitemap);
+        theSitemap = new Map([...theSitemap, ...updatedSitemap])
+      }
+    }
 
     return theSitemap;
   } catch (error) {
@@ -41,9 +46,10 @@ async function mapLinks(root, path, sitemap) {
   }
 }
 
-async function scrape() {
-  const sitemap = await mapLinks('https://etpf.org', 'index.html', new Map());
-  console.log(sitemap);
+function scrape() {
+  mapLinks('https://etpf.org', 'index.html', new Map())
+    .then(sitemap => console.log(sitemap))
+    .catch(err => console.error(err))
 }
 
 scrape();
