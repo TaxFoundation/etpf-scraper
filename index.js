@@ -25,6 +25,11 @@ async function mapLinks(root, path, sitemap) {
     // add new key and set links at path
     theSitemap.set(path, links);
 
+    links.filter(link => link.match(/\.pdf$/))
+      .forEach(link => {
+        if (!theSitemap.has(link)) theSitemap.set(link, []);
+      });
+
     // filter out crawled internal links
     links = links.filter(link => (
       !theSitemap.has(link)
@@ -48,7 +53,11 @@ async function mapLinks(root, path, sitemap) {
 
 function scrape() {
   mapLinks('https://etpf.org', 'index.html', new Map())
-    .then(sitemap => console.log(sitemap))
+    .then(sitemap => {
+      let jsondata = {};
+      sitemap.forEach((v, k) => jsondata[k] = v);
+      console.log(JSON.stringify(jsondata));
+    })
     .catch(err => console.error(err))
 }
 
